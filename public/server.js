@@ -4,7 +4,7 @@ const axios = require('axios');
 const fs = require('fs');
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 // Configure CORS
 app.use(cors({
@@ -16,7 +16,7 @@ app.use(cors({
 app.use(express.json());
 
 // API configuration - using Gemini API
-const GEMINI_API_KEY = 'AIzaSyDPs6gHkpSCNYaS1TL9x8jE3iYlyBNvqWA'; // Replace with your key
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyDPs6gHkpSCNYaS1TL9x8jE3iYlyBNvqWA'; // Use environment variable with fallback
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
 // Store conversations by session ID
@@ -116,11 +116,16 @@ app.post('/chat', async (req, res) => {
       // Add to conversation history
       conversationHistory.push(`Luna: ${reply}`);
       
-      // Log the interaction
-      const logEntry = `${new Date().toISOString()} - Session: ${sessionId} - You: ${message} | Luna: ${reply}\n`;
-      fs.appendFile('chat_log.txt', logEntry, (err) => {
-        if (err) console.error("Error writing to log:", err);
-      });
+      // Log the interaction (modified for cloud environment)
+      try {
+        const logEntry = `${new Date().toISOString()} - Session: ${sessionId} - You: ${message} | Luna: ${reply}\n`;
+        fs.appendFile('chat_log.txt', logEntry, (err) => {
+          if (err) console.error("Error writing to log:", err);
+        });
+      } catch (logError) {
+        // Just log to console if file system logging fails
+        console.log(`Chat log: Session: ${sessionId} - You: ${message} | Luna: ${reply}`);
+      }
       
       console.log(`Sending response to session ${sessionId}: ${reply}`);
       return res.json({ reply });
@@ -160,4 +165,5 @@ app.get('/health', (req, res) => {
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
   console.log(`Using Gemini API for responses`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
