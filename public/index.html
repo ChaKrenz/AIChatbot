@@ -169,7 +169,7 @@
     
     <div class="buttons-container">
       <button id="connectButton">Connect Wallet</button>
-      <button id="buyTimeButton" disabled>Buy Chat Time (0.001 ETH = 5 min)</button>
+      <button id="buyTimeButton" disabled>Buy Chat Time (0.01 ETH = 2 min)</button>
     </div>
 
     <div class="chat-container" id="chatContainer">
@@ -194,10 +194,11 @@
     let chatTimer = null;
     let chatHistory = [];
     let isTyping = false;
-    const SECONDS_PER_PAYMENT = 5 * 60; // 5 minutes
-    const PAYMENT_AMOUNT = "0.001"; // 0.001 ETH
+    const SECONDS_PER_PAYMENT = 2 * 60; // 2 minutes
+    const PAYMENT_AMOUNT = "0.01"; // 0.01 ETH
     const SERVICE_ADDRESS = "0x00c2Ce8Fafd4106F958791F0E61aD7b8182f007D";
-    const API_URL = "http://localhost:3000";
+    // Update API URL to your Render service URL
+    const API_URL = "https://freaky-ai.onrender.com";
 
     // DOM Elements
     const connectButton = document.getElementById('connectButton');

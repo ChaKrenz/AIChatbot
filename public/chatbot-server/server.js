@@ -15,9 +15,6 @@ app.use(cors({
 
 app.use(express.json());
 
-// Serve static files from the current directory (where index.html is)
-app.use(express.static(__dirname));
-
 // API configuration - using Gemini API
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyDPs6gHkpSCNYaS1TL9x8jE3iYlyBNvqWA'; // Use environment variable with fallback
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
