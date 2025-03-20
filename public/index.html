@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Girlfriend Chatbot</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f9f2f4;
+      color: #333;
+    }
+    .container {
+      max-width: 600px;
+      margin: 20px auto;
+      background: white;
+      padding: 20px;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    }
+    h1 {
+      color: #ff6f61;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    button {
+      background-color: #ff6f61;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      margin: 5px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+    button:hover {
+      background-color: #e85c50;
+      transform: translateY(-2px);
+    }
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .status-panel {
+      background-color: #fff9fa;
+      padding: 15px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      border: 1px solid #ffe6e9;
+    }
+    .status {
+      font-weight: 600;
+      color: #ff6f61;
+    }
+    #ethBalance {
+      font-size: 18px;
+      color: #2980b9;
+      font-weight: 600;
+    }
+    #timeRemaining {
+      font-size: 18px;
+      color: #ff6f61;
+      font-weight: 600;
+    }
+    .chat-container {
+      margin-top: 20px;
+      text-align: left;
+      display: none;
+    }
+    .chat-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .chat-header h2 {
+      margin: 0;
+      flex-grow: 1;
+    }
+    #chatOutput {
+      height: 350px;
+      overflow-y: scroll;
+      border: 1px solid #ffe6e9;
+      padding: 15px;
+      background: #fff9fa;
+      border-radius: 12px;
+      margin-bottom: 15px;
+    }
+    .message {
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
+    .message.user {
+      text-align: right;
+    }
+    .message.girlfriend {
+      text-align: left;
+    }
+    .message-bubble {
+      display: inline-block;
+      padding: 10px 15px;
+      border-radius: 18px;
+      max-width: 80%;
+      word-wrap: break-word;
+    }
+    .message.user .message-bubble {
+      background-color: #e1f5fe;
+      color: #0277bd;
+    }
+    .message.girlfriend .message-bubble {
+      background-color: #ffe6e9;
+      color: #d81b60;
+    }
+    .chat-input-container {
+      display: flex;
+      margin-top: 10px;
+    }
+    #chatInput {
+      flex-grow: 1;
+      padding: 12px;
+      border-radius: 50px;
+      border: 1px solid #ff6f61;
+      font-size: 16px;
+      outline: none;
+    }
+    #chatInput:focus {
+      border-color: #e85c50;
+      box-shadow: 0 0 0 2px rgba(255, 111, 97, 0.2);
+    }
+    #sendMessage {
+      margin-left: 10px;
+      padding: 12px 20px;
+    }
+    .typing-indicator {
+      display: none;
+      text-align: left;
+      margin-top: 5px;
+      color: #888;
+      font-style: italic;
+    }
+    .buttons-container {
+      text-align: center;
+      margin: 15px 0;
+    }
+    @media (max-width: 640px) {
+      .container {
+        margin: 10px;
+        padding: 15px;
+      }
+      #chatOutput {
+        height: 300px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Your AI Girlfriend</h1>
+    
+    <div class="status-panel">
+      <p>Status: <span id="status" class="status">Disconnected</span></p>
+      <p>Account: <span id="account">Not connected</span></p>
+      <p>ETH Balance: <span id="ethBalance">0</span> ETH</p>
+      <p>Chat Time: <span id="timeRemaining">0</span> seconds</p>
+    </div>
+    
+    <div class="buttons-container">
+      <button id="connectButton">Connect Wallet</button>
+      <button id="buyTimeButton" disabled>Buy Chat Time (0.001 ETH = 5 min)</button>
+    </div>
+
+    <div class="chat-container" id="chatContainer">
+      <div class="chat-header">
+        <h2>Chat with Luna 💕</h2>
+      </div>
+      <div id="chatOutput"></div>
+      <div class="typing-indicator" id="typingIndicator">Luna is typing...</div>
+      <div class="chat-input-container">
+        <input type="text" id="chatInput" placeholder="Type your message...">
+        <button id="sendMessage">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+  <script>
+    // Global variables
+    let provider, signer;
+    let userAddress = null;
+    let chatTimeRemaining = 0;
+    let chatTimer = null;
+    let chatHistory = [];
+    let isTyping = false;
+    const SECONDS_PER_PAYMENT = 5 * 60; // 5 minutes
+    const PAYMENT_AMOUNT = "0.001"; // 0.001 ETH
+    const SERVICE_ADDRESS = "0x00c2Ce8Fafd4106F958791F0E61aD7b8182f007D";
+    const API_URL = "http://localhost:3000";
+
+    // DOM Elements
+    const connectButton = document.getElementById('connectButton');
+    const buyTimeButton = document.getElementById('buyTimeButton');
+    const statusElement = document.getElementById('status');
+    const accountElement = document.getElementById('account');
+    const ethBalanceElement = document.getElementById('ethBalance');
+    const timeRemainingElement = document.getElementById('timeRemaining');
+    const chatContainer = document.getElementById('chatContainer');
+    const chatOutput = document.getElementById('chatOutput');
+    const chatInput = document.getElementById('chatInput');
+    const sendMessageButton = document.getElementById('sendMessage');
+    const typingIndicator = document.getElementById('typingIndicator');
+
+    // Save app state to localStorage
+    function saveAppState() {
+      const appState = {
+        userAddress,
+        chatTimeRemaining,
+        chatHistory,
+        connected: !!userAddress
+      };
+      localStorage.setItem('aiGirlfriendAppState', JSON.stringify(appState));
+    }
+
+    // Load app state from localStorage
+    function loadAppState() {
+      try {
+        const savedState = localStorage.getItem('aiGirlfriendAppState');
+        if (savedState) {
+          const appState = JSON.parse(savedState);
+          chatHistory = appState.chatHistory || [];
+          chatTimeRemaining = appState.chatTimeRemaining || 0;
+          
+          if (chatTimeRemaining > 0) {
+            timeRemainingElement.textContent = formatTime(chatTimeRemaining);
+            chatContainer.style.display = "block";
+            displayChatHistory();
+            startChatTimer();
+          }
+          
+          return appState.connected;
+        }
+      } catch (error) {
+        console.error("Error loading app state:", error);
+      }
+      return false;
+    }
+
+    // Format time as minutes:seconds
+    function formatTime(seconds) {
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    // Connect wallet
+    async function connectWallet() {
+      try {
+        connectButton.disabled = true;
+        statusElement.textContent = "Connecting...";
+        
+        if (!window.ethereum) throw new Error("MetaMask not installed");
+        
+        provider = new ethers.BrowserProvider(window.ethereum);
+        const accounts = await provider.send("eth_requestAccounts", []);
+        
+        if (!accounts || accounts.length === 0) {
+          throw new Error("No accounts available");
+        }
+        
+        signer = await provider.getSigner();
+        userAddress = await signer.getAddress();
+
+        const network = await provider.getNetwork();
+        // Check if connected to Sepolia testnet
+        if (network.chainId !== 11155111n) {
+          statusElement.textContent = "Please connect to Sepolia testnet";
+          try {
+            await window.ethereum.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: '0xaa36a7' }], // Sepolia chainId in hex
+            });
+          } catch (switchError) {
+            if (switchError.code === 4902) {
+              try {
+                await window.ethereum.request({
+                  method: 'wallet_addEthereumChain',
+                  params: [{
+                    chainId: '0xaa36a7',
+                    chainName: 'Sepolia Testnet',
+                    nativeCurrency: {
+                      name: 'Sepolia ETH',
+                      symbol: 'ETH',
+                      decimals: 18
+                    },
+                    rpcUrls: ['https://sepolia.infura.io/v3/'],
+                    blockExplorerUrls: ['https://sepolia.etherscan.io/']
+                  }],
+                });
+              } catch (addError) {
+                connectButton.disabled = false;
+                throw new Error("Failed to add Sepolia network");
+              }
+            } else {
+              connectButton.disabled = false;
+              throw switchError;
+            }
+          }
+          provider = new ethers.BrowserProvider(window.ethereum);
+          signer = await provider.getSigner();
+        }
+
+        statusElement.textContent = `Connected to Sepolia`;
+        accountElement.textContent = userAddress.slice(0, 6) + "..." + userAddress.slice(-4);
+        connectButton.disabled = true;
+        buyTimeButton.disabled = false;
+        
+        await updateEthBalance();
+        saveAppState();
+      } catch (error) {
+        console.error("Connection error:", error);
+        statusElement.textContent = `Error: ${error.message}`;
+        connectButton.disabled = false;
+      }
+    }
+
+    // Update ETH balance
+    async function updateEthBalance() {
+      if (!provider || !userAddress) {
+        ethBalanceElement.textContent = "0";
+        return;
+      }
+      
+      try {
+        const balance = await provider.getBalance(userAddress);
+        ethBalanceElement.textContent = ethers.formatEther(balance).substring(0, 6);
+      } catch (error) {
+        console.error("Balance fetch error:", error);
+      }
+    }
+
+    // Buy chat time
+    async function buyChatTime() {
+      if (!signer || !userAddress) {
+        alert("Please connect your wallet!");
+        return;
+      }
+      
+      try {
+        buyTimeButton.disabled = true;
+        const amount = ethers.parseEther(PAYMENT_AMOUNT);
+        statusElement.textContent = "Processing payment...";
+        
+        const tx = await signer.sendTransaction({
+          to: SERVICE_ADDRESS,
+          value: amount
+        });
+        
+        statusElement.textContent = "Confirming transaction...";
+        await tx.wait();
+        
+        chatTimeRemaining += SECONDS_PER_PAYMENT;
+        timeRemainingElement.textContent = formatTime(chatTimeRemaining);
+        chatContainer.style.display = "block";
+        statusElement.textContent = "Payment successful!";
+        
+        if (chatHistory.length === 0) {
+          // Add welcome message
+          const welcomeMsg = "Hey there! I'm Luna. I'm so excited to chat with you. What's on your mind today? 💕";
+          addMessageToChat('girlfriend', welcomeMsg);
+          chatHistory.push({ role: 'girlfriend', content: welcomeMsg });
+        } else {
+          // Display existing chat history
+          displayChatHistory();
+        }
+        
+        startChatTimer();
+        await updateEthBalance();
+        saveAppState();
+        
+      } catch (error) {
+        console.error("Payment error:", error);
+        statusElement.textContent = error.code === 4001 ? 
+          "Transaction rejected by user" : 
+          `Payment failed: ${error.message}`;
+      } finally {
+        buyTimeButton.disabled = false;
+      }
+    }
+
+    // Start chat timer
+    function startChatTimer() {
+      if (chatTimer) {
+        clearInterval(chatTimer);
+      }
+      
+      chatTimer = setInterval(() => {
+        if (chatTimeRemaining > 0) {
+          chatTimeRemaining--;
+          timeRemainingElement.textContent = formatTime(chatTimeRemaining);
+          
+          if (chatTimeRemaining % 10 === 0) {
+            saveAppState();
+          }
+        } else {
+          clearInterval(chatTimer);
+          chatTimer = null;
+          chatContainer.style.display = "none";
+          statusElement.textContent = "Chat time expired. Buy more to continue!";
+          saveAppState();
+        }
+      }, 1000);
+    }
+
+    // Add message to chat UI
+    function addMessageToChat(role, content) {
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `message ${role}`;
+      
+      const bubble = document.createElement('div');
+      bubble.className = 'message-bubble';
+      bubble.textContent = content;
+      
+      messageDiv.appendChild(bubble);
+      chatOutput.appendChild(messageDiv);
+      chatOutput.scrollTop = chatOutput.scrollHeight;
+    }
+
+    // Display chat history
+    function displayChatHistory() {
+      chatOutput.innerHTML = "";
+      chatHistory.forEach(msg => {
+        addMessageToChat(msg.role, msg.content);
+      });
+      chatOutput.scrollTop = chatOutput.scrollHeight;
+    }
+
+    // Show typing indicator
+    function showTypingIndicator(show) {
+      isTyping = show;
+      typingIndicator.style.display = show ? 'block' : 'none';
+    }
+
+    // Send message and receive response
+    async function sendMessage(event) {
+      if (event) event.preventDefault();
+      
+      const message = chatInput.value.trim();
+      if (!message || chatTimeRemaining <= 0 || isTyping) return;
+      
+      chatInput.value = "";
+      sendMessageButton.disabled = true;
+      
+      try {
+        // Add user message to UI
+        addMessageToChat('user', message);
+        
+        // Add to history
+        chatHistory.push({ role: 'user', content: message });
+        saveAppState();
+        
+        // Show typing indicator
+        showTypingIndicator(true);
+        
+        // Simulate natural typing delay (300-800ms)
+        const typingDelay = 300 + Math.random() * 500;
+        await new Promise(resolve => setTimeout(resolve, typingDelay));
+        
+        // Send to server
+        const response = await fetch(`${API_URL}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message, userName: "babe" })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // Hide typing indicator
+        showTypingIndicator(false);
+        
+        // Add girlfriend's response to UI
+        addMessageToChat('girlfriend', data.reply);
+        
+        // Add to history
+        chatHistory.push({ role: 'girlfriend', content: data.reply });
+        saveAppState();
+        
+      } catch (error) {
+        console.error("Chat error:", error);
+        showTypingIndicator(false);
+        
+        const errorMsg = "Sorry, I got distracted thinking about you. What were we talking about? 💭";
+        addMessageToChat('girlfriend', errorMsg);
+        chatHistory.push({ role: 'girlfriend', content: errorMsg });
+        saveAppState();
+      } finally {
+        sendMessageButton.disabled = false;
+      }
+    }
+
+    // Initialize the app
+    function initApp() {
+      // Set up event listeners
+      connectButton.addEventListener('click', connectWallet);
+      buyTimeButton.addEventListener('click', buyChatTime);
+      sendMessageButton.addEventListener('click', sendMessage);
+      
+      chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          sendMessage();
+        }
+      });
+      
+      // Set up MetaMask event listeners
+      if (window.ethereum) {
+        window.ethereum.on('accountsChanged', (accounts) => {
+          if (accounts.length === 0) {
+            statusElement.textContent = "Disconnected";
+            accountElement.textContent = "Not connected";
+            connectButton.disabled = false;
+            buyTimeButton.disabled = true;
+            userAddress = null;
+            ethBalanceElement.textContent = "0";
+            
+            if (chatTimer) {
+              clearInterval(chatTimer);
+              chatTimer = null;
+            }
+            
+            chatContainer.style.display = "none";
+            saveAppState();
+          } else {
+            connectWallet();
+          }
+        });
+        
+        window.ethereum.on('chainChanged', () => {
+          window.location.reload();
+        });
+      }
+      
+      // Try to load previous state
+      const wasConnected = loadAppState();
+      if (wasConnected && window.ethereum) {
+        connectWallet();
+      }
+    }
+
+    // Start the app
+    document.addEventListener('DOMContentLoaded', initApp);
+  </script>
+</body>
+</html>
