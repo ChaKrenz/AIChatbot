@@ -290,8 +290,8 @@
             updateChatTitle();
             displayChatHistory();
             startChatTimer();
-            // Show toggle button only if Luna is selected
-            toggleSpeechButton.style.display = selectedAI === "luna" ? "flex" : "none";
+            // Show toggle button for Luna or Mr. Woof
+            toggleSpeechButton.style.display = (selectedAI === "luna" || selectedAI === "mrWoof") ? "flex" : "none";
             updateSpeechButtonIcon();
           }
           
@@ -423,7 +423,7 @@
         } else {
           updateChatTitle();
           displayChatHistory();
-          toggleSpeechButton.style.display = selectedAI === "luna" ? "flex" : "none";
+          toggleSpeechButton.style.display = (selectedAI === "luna" || selectedAI === "mrWoof") ? "flex" : "none";
         }
         
         startChatTimer();
@@ -516,7 +516,7 @@
       return response;
     }
 
-    // Text-to-Speech function for Luna (ignores emojis)
+    // Text-to-Speech function for Luna and Mr. Woof (ignores emojis)
     function speakText(text) {
       if (!speechEnabled || !window.speechSynthesis) return; // Skip if disabled or unsupported
       
@@ -528,14 +528,20 @@
       
       const utterance = new SpeechSynthesisUtterance(textWithoutEmojis);
       utterance.lang = 'en-US'; // Set language
-      utterance.pitch = 1.2; // Slightly higher pitch for a playful tone
       utterance.rate = 1.0; // Normal speed
       utterance.volume = 1.0; // Full volume
       
-      // Try to find a female voice (not guaranteed across all devices)
       const voices = window.speechSynthesis.getVoices();
-      const femaleVoice = voices.find(voice => voice.name.toLowerCase().includes('female') || voice.name.includes('Google US English'));
-      if (femaleVoice) utterance.voice = femaleVoice;
+      
+      if (selectedAI === "luna") {
+        utterance.pitch = 1.2; // Higher pitch for Luna
+        const femaleVoice = voices.find(voice => voice.name.toLowerCase().includes('female') || voice.name.includes('Google US English'));
+        if (femaleVoice) utterance.voice = femaleVoice;
+      } else if (selectedAI === "mrWoof") {
+        utterance.pitch = 0.8; // Lower pitch for Mr. Woof
+        const maleVoice = voices.find(voice => voice.name.toLowerCase().includes('male') || voice.name.includes('Microsoft David') || voice.name.includes('Google UK English Male'));
+        if (maleVoice) utterance.voice = maleVoice;
+      }
       
       window.speechSynthesis.speak(utterance);
     }
@@ -544,7 +550,7 @@
     function updateSpeechButtonIcon() {
       if (toggleSpeechButton) {
         toggleSpeechButton.classList.toggle('disabled', !speechEnabled);
-        toggleSpeechButton.style.display = selectedAI === "luna" ? "flex" : "none";
+        toggleSpeechButton.style.display = (selectedAI === "luna" || selectedAI === "mrWoof") ? "flex" : "none";
       }
     }
 
@@ -577,6 +583,7 @@
           await new Promise(resolve => setTimeout(resolve, 300)); // Small delay for realism
           addMessageToChat('assistant', reply);
           chatHistory.push({ role: 'assistant', content: reply });
+          speakText(reply); // Speak Mr. Woof's response
         } else {
           // Simulate natural typing delay (300-800ms)
           const typingDelay = 300 + Math.random() * 500;
@@ -635,7 +642,7 @@
       chatHistory = []; // Reset chat history on AI switch
       displayChatHistory();
       updateChatTitle();
-      toggleSpeechButton.style.display = selectedAI === "luna" ? "flex" : "none"; // Show/hide toggle button
+      toggleSpeechButton.style.display = (selectedAI === "luna" || selectedAI === "mrWoof") ? "flex" : "none"; // Show/hide toggle button
       updateSpeechButtonIcon();
       saveAppState();
       chatInput.focus();
