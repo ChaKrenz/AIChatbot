@@ -151,6 +151,32 @@
       gap: 10px;
       margin-bottom: 20px;
     }
+    /* Microphone toggle button styles */
+    #toggleSpeech {
+      padding: 10px;
+      width: 40px;
+      height: 40px;
+      display: none; /* Hidden by default */
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      margin: 10px auto;
+    }
+    #toggleSpeech .mic-icon {
+      font-size: 20px;
+    }
+    #toggleSpeech.disabled .mic-icon::after {
+      content: "🚫";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 24px;
+      opacity: 0.7;
+    }
+    #toggleSpeech:hover:not(:disabled) {
+      background-color: #e85c50;
+    }
     @media (max-width: 640px) {
       .container {
         margin: 10px;
@@ -190,7 +216,7 @@
       </div>
       <div id="chatOutput"></div>
       <div class="typing-indicator" id="typingIndicator">Your AI is typing...</div>
-      <button id="toggleSpeech">Toggle Speech</button>
+      <button id="toggleSpeech" title="Toggle Speech"><span class="mic-icon">🎤</span></button>
       <div class="chat-input-container">
         <input type="text" id="chatInput" placeholder="Type your message...">
         <button id="sendMessage">Send</button>
@@ -240,7 +266,7 @@
         chatTimeRemaining,
         chatHistory,
         selectedAI,
-        speechEnabled, // Save TTS preference
+        speechEnabled,
         connected: !!userAddress
       };
       localStorage.setItem('aiAssistantAppState', JSON.stringify(appState));
@@ -255,7 +281,7 @@
           chatHistory = appState.chatHistory || [];
           chatTimeRemaining = appState.chatTimeRemaining || 0;
           selectedAI = appState.selectedAI || null;
-          speechEnabled = appState.speechEnabled !== undefined ? appState.speechEnabled : true; // Default to true
+          speechEnabled = appState.speechEnabled !== undefined ? appState.speechEnabled : true;
           
           if (chatTimeRemaining > 0) {
             timeRemainingElement.textContent = formatTime(chatTimeRemaining);
@@ -264,9 +290,11 @@
             updateChatTitle();
             displayChatHistory();
             startChatTimer();
+            // Show toggle button only if Luna is selected
+            toggleSpeechButton.style.display = selectedAI === "luna" ? "flex" : "none";
+            updateSpeechButtonIcon();
           }
           
-          updateSpeechButtonText();
           return appState.connected;
         }
       } catch (error) {
@@ -391,9 +419,11 @@
         
         if (chatHistory.length === 0 || !selectedAI) {
           chatTitle.textContent = "Select an AI to start chatting!";
+          toggleSpeechButton.style.display = "none"; // Hide toggle button initially
         } else {
           updateChatTitle();
           displayChatHistory();
+          toggleSpeechButton.style.display = selectedAI === "luna" ? "flex" : "none";
         }
         
         startChatTimer();
@@ -429,6 +459,7 @@
           chatTimer = null;
           chatContainer.style.display = "none";
           aiSelectionButtons.style.display = "none";
+          toggleSpeechButton.style.display = "none"; // Hide toggle button when time expires
           statusElement.textContent = "Chat time expired. Buy more to continue!";
           saveAppState();
         }
@@ -509,10 +540,11 @@
       window.speechSynthesis.speak(utterance);
     }
 
-    // Update toggle button text
-    function updateSpeechButtonText() {
+    // Update toggle button icon and visibility
+    function updateSpeechButtonIcon() {
       if (toggleSpeechButton) {
-        toggleSpeechButton.textContent = speechEnabled ? "Disable Speech" : "Enable Speech";
+        toggleSpeechButton.classList.toggle('disabled', !speechEnabled);
+        toggleSpeechButton.style.display = selectedAI === "luna" ? "flex" : "none";
       }
     }
 
@@ -603,6 +635,8 @@
       chatHistory = []; // Reset chat history on AI switch
       displayChatHistory();
       updateChatTitle();
+      toggleSpeechButton.style.display = selectedAI === "luna" ? "flex" : "none"; // Show/hide toggle button
+      updateSpeechButtonIcon();
       saveAppState();
       chatInput.focus();
       console.log(`Selected AI: ${selectedAI}`); // Debug log
@@ -629,7 +663,7 @@
       if (toggleSpeechButton) {
         toggleSpeechButton.addEventListener('click', () => {
           speechEnabled = !speechEnabled;
-          updateSpeechButtonText();
+          updateSpeechButtonIcon();
           saveAppState();
           if (!speechEnabled) window.speechSynthesis.cancel(); // Stop speech if disabled
         });
@@ -650,6 +684,7 @@
             }
             chatContainer.style.display = "none";
             aiSelectionButtons.style.display = "none";
+            toggleSpeechButton.style.display = "none"; // Hide toggle button on disconnect
             saveAppState();
           } else {
             connectWallet();
