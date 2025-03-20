@@ -190,6 +190,7 @@
       </div>
       <div id="chatOutput"></div>
       <div class="typing-indicator" id="typingIndicator">Your AI is typing...</div>
+      <button id="toggleSpeech">Toggle Speech</button>
       <div class="chat-input-container">
         <input type="text" id="chatInput" placeholder="Type your message...">
         <button id="sendMessage">Send</button>
@@ -207,6 +208,7 @@
     let chatHistory = [];
     let isTyping = false;
     let selectedAI = null; // null, "luna", "assistant", or "mrWoof"
+    let speechEnabled = true; // Toggle for enabling/disabling TTS
     const SECONDS_PER_PAYMENT = 2 * 60; // 2 minutes
     const PAYMENT_AMOUNT = "0.01"; // 0.01 ETH
     const SERVICE_ADDRESS = "0x00c2Ce8Fafd4106F958791F0E61aD7b8182f007D";
@@ -229,6 +231,7 @@
     const selectAssistant = document.getElementById('selectAssistant');
     const selectMrWoof = document.getElementById('selectMrWoof');
     const chatTitle = document.getElementById('chatTitle');
+    const toggleSpeechButton = document.getElementById('toggleSpeech');
 
     // Save app state to localStorage
     function saveAppState() {
@@ -237,6 +240,7 @@
         chatTimeRemaining,
         chatHistory,
         selectedAI,
+        speechEnabled, // Save TTS preference
         connected: !!userAddress
       };
       localStorage.setItem('aiAssistantAppState', JSON.stringify(appState));
@@ -251,6 +255,7 @@
           chatHistory = appState.chatHistory || [];
           chatTimeRemaining = appState.chatTimeRemaining || 0;
           selectedAI = appState.selectedAI || null;
+          speechEnabled = appState.speechEnabled !== undefined ? appState.speechEnabled : true; // Default to true
           
           if (chatTimeRemaining > 0) {
             timeRemainingElement.textContent = formatTime(chatTimeRemaining);
@@ -261,6 +266,7 @@
             startChatTimer();
           }
           
+          updateSpeechButtonText();
           return appState.connected;
         }
       } catch (error) {
@@ -479,6 +485,37 @@
       return response;
     }
 
+    // Text-to-Speech function for Luna (ignores emojis)
+    function speakText(text) {
+      if (!speechEnabled || !window.speechSynthesis) return; // Skip if disabled or unsupported
+      
+      // Remove emojis using a regex
+      const textWithoutEmojis = text.replace(/[\u{1F300}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
+      
+      // Cancel any ongoing speech
+      window.speechSynthesis.cancel();
+      
+      const utterance = new SpeechSynthesisUtterance(textWithoutEmojis);
+      utterance.lang = 'en-US'; // Set language
+      utterance.pitch = 1.2; // Slightly higher pitch for a playful tone
+      utterance.rate = 1.0; // Normal speed
+      utterance.volume = 1.0; // Full volume
+      
+      // Try to find a female voice (not guaranteed across all devices)
+      const voices = window.speechSynthesis.getVoices();
+      const femaleVoice = voices.find(voice => voice.name.toLowerCase().includes('female') || voice.name.includes('Google US English'));
+      if (femaleVoice) utterance.voice = femaleVoice;
+      
+      window.speechSynthesis.speak(utterance);
+    }
+
+    // Update toggle button text
+    function updateSpeechButtonText() {
+      if (toggleSpeechButton) {
+        toggleSpeechButton.textContent = speechEnabled ? "Disable Speech" : "Enable Speech";
+      }
+    }
+
     // Send message and receive response
     async function sendMessage(event) {
       if (event) event.preventDefault();
@@ -502,9 +539,9 @@
           showTypingIndicator(true);
         }
         
-        // Handle response based on selected AI
+        let reply;
         if (selectedAI === "mrWoof") {
-          const reply = generateMrWoofResponse();
+          reply = generateMrWoofResponse();
           await new Promise(resolve => setTimeout(resolve, 300)); // Small delay for realism
           addMessageToChat('assistant', reply);
           chatHistory.push({ role: 'assistant', content: reply });
@@ -513,6 +550,8 @@
           const typingDelay = 300 + Math.random() * 500;
           await new Promise(resolve => setTimeout(resolve, typingDelay));
           
+          console.log(`Sending request to server with aiType: ${selectedAI}`); // Debug log
+          
           // Send to server with AI type
           const response = await fetch(`${API_URL}/chat`, {
             method: 'POST',
@@ -520,7 +559,7 @@
             body: JSON.stringify({ 
               message, 
               userName: "babe", 
-              aiType: selectedAI // Pass AI type to backend
+              aiType: selectedAI
             })
           });
           
@@ -529,12 +568,19 @@
           }
           
           const data = await response.json();
+          reply = data.reply;
+          console.log(`Received response: ${reply}`); // Debug log
           
           // Add AI response to UI
-          addMessageToChat('assistant', data.reply);
+          addMessageToChat('assistant', reply);
           
           // Add to history
-          chatHistory.push({ role: 'assistant', content: data.reply });
+          chatHistory.push({ role: 'assistant', content: reply });
+          
+          // Speak the response if it's Luna
+          if (selectedAI === "luna") {
+            speakText(reply);
+          }
         }
         
         saveAppState();
@@ -559,6 +605,7 @@
       updateChatTitle();
       saveAppState();
       chatInput.focus();
+      console.log(`Selected AI: ${selectedAI}`); // Debug log
     }
 
     // Initialize the app
@@ -577,6 +624,16 @@
           sendMessage();
         }
       });
+      
+      // Add TTS toggle listener
+      if (toggleSpeechButton) {
+        toggleSpeechButton.addEventListener('click', () => {
+          speechEnabled = !speechEnabled;
+          updateSpeechButtonText();
+          saveAppState();
+          if (!speechEnabled) window.speechSynthesis.cancel(); // Stop speech if disabled
+        });
+      }
       
       if (window.ethereum) {
         window.ethereum.on('accountsChanged', (accounts) => {
@@ -602,6 +659,13 @@
         window.ethereum.on('chainChanged', () => {
           window.location.reload();
         });
+      }
+      
+      // Ensure voices are loaded (some browsers need this)
+      if (window.speechSynthesis) {
+        window.speechSynthesis.onvoiceschanged = () => {
+          console.log("Voices loaded:", window.speechSynthesis.getVoices());
+        };
       }
       
       const wasConnected = loadAppState();
