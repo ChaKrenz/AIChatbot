@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Girlfriend Chatbot</title>
+  <title>Your AI Assistant</title>
   <style>
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -96,7 +96,7 @@
     .message.user {
       text-align: right;
     }
-    .message.girlfriend {
+    .message.assistant {
       text-align: left;
     }
     .message-bubble {
@@ -110,7 +110,7 @@
       background-color: #e1f5fe;
       color: #0277bd;
     }
-    .message.girlfriend .message-bubble {
+    .message.assistant .message-bubble {
       background-color: #ffe6e9;
       color: #d81b60;
     }
@@ -145,6 +145,12 @@
       text-align: center;
       margin: 15px 0;
     }
+    .ai-selection-buttons {
+      display: none;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
     @media (max-width: 640px) {
       .container {
         margin: 10px;
@@ -158,7 +164,7 @@
 </head>
 <body>
   <div class="container">
-    <h1>Your AI Girlfriend</h1>
+    <h1>Your AI Assistant</h1>
     
     <div class="status-panel">
       <p>Status: <span id="status" class="status">Disconnected</span></p>
@@ -172,12 +178,18 @@
       <button id="buyTimeButton" disabled>Buy Chat Time (0.01 ETH = 2 min)</button>
     </div>
 
+    <div class="ai-selection-buttons" id="aiSelectionButtons">
+      <button id="selectLuna">Chat with Luna 💕</button>
+      <button id="selectAssistant">Chat with Assistant 🤓</button>
+      <button id="selectMrWoof">Chat with Mr. Woof 🐶</button>
+    </div>
+
     <div class="chat-container" id="chatContainer">
       <div class="chat-header">
-        <h2>Chat with Luna 💕</h2>
+        <h2 id="chatTitle">Select an AI to start chatting!</h2>
       </div>
       <div id="chatOutput"></div>
-      <div class="typing-indicator" id="typingIndicator">Luna is typing...</div>
+      <div class="typing-indicator" id="typingIndicator">Your AI is typing...</div>
       <div class="chat-input-container">
         <input type="text" id="chatInput" placeholder="Type your message...">
         <button id="sendMessage">Send</button>
@@ -194,10 +206,10 @@
     let chatTimer = null;
     let chatHistory = [];
     let isTyping = false;
+    let selectedAI = null; // null, "luna", "assistant", or "mrWoof"
     const SECONDS_PER_PAYMENT = 2 * 60; // 2 minutes
     const PAYMENT_AMOUNT = "0.01"; // 0.01 ETH
     const SERVICE_ADDRESS = "0x00c2Ce8Fafd4106F958791F0E61aD7b8182f007D";
-    // Update API URL to your Render service URL
     const API_URL = "https://freaky-ai.onrender.com";
 
     // DOM Elements
@@ -212,6 +224,11 @@
     const chatInput = document.getElementById('chatInput');
     const sendMessageButton = document.getElementById('sendMessage');
     const typingIndicator = document.getElementById('typingIndicator');
+    const aiSelectionButtons = document.getElementById('aiSelectionButtons');
+    const selectLuna = document.getElementById('selectLuna');
+    const selectAssistant = document.getElementById('selectAssistant');
+    const selectMrWoof = document.getElementById('selectMrWoof');
+    const chatTitle = document.getElementById('chatTitle');
 
     // Save app state to localStorage
     function saveAppState() {
@@ -219,23 +236,27 @@
         userAddress,
         chatTimeRemaining,
         chatHistory,
+        selectedAI,
         connected: !!userAddress
       };
-      localStorage.setItem('aiGirlfriendAppState', JSON.stringify(appState));
+      localStorage.setItem('aiAssistantAppState', JSON.stringify(appState));
     }
 
     // Load app state from localStorage
     function loadAppState() {
       try {
-        const savedState = localStorage.getItem('aiGirlfriendAppState');
+        const savedState = localStorage.getItem('aiAssistantAppState');
         if (savedState) {
           const appState = JSON.parse(savedState);
           chatHistory = appState.chatHistory || [];
           chatTimeRemaining = appState.chatTimeRemaining || 0;
+          selectedAI = appState.selectedAI || null;
           
           if (chatTimeRemaining > 0) {
             timeRemainingElement.textContent = formatTime(chatTimeRemaining);
+            aiSelectionButtons.style.display = "flex";
             chatContainer.style.display = "block";
+            updateChatTitle();
             displayChatHistory();
             startChatTimer();
           }
@@ -274,13 +295,12 @@
         userAddress = await signer.getAddress();
 
         const network = await provider.getNetwork();
-        // Check if connected to Sepolia testnet
         if (network.chainId !== 11155111n) {
           statusElement.textContent = "Please connect to Sepolia testnet";
           try {
             await window.ethereum.request({
               method: 'wallet_switchEthereumChain',
-              params: [{ chainId: '0xaa36a7' }], // Sepolia chainId in hex
+              params: [{ chainId: '0xaa36a7' }],
             });
           } catch (switchError) {
             if (switchError.code === 4902) {
@@ -290,11 +310,7 @@
                   params: [{
                     chainId: '0xaa36a7',
                     chainName: 'Sepolia Testnet',
-                    nativeCurrency: {
-                      name: 'Sepolia ETH',
-                      symbol: 'ETH',
-                      decimals: 18
-                    },
+                    nativeCurrency: { name: 'Sepolia ETH', symbol: 'ETH', decimals: 18 },
                     rpcUrls: ['https://sepolia.infura.io/v3/'],
                     blockExplorerUrls: ['https://sepolia.etherscan.io/']
                   }],
@@ -363,16 +379,14 @@
         
         chatTimeRemaining += SECONDS_PER_PAYMENT;
         timeRemainingElement.textContent = formatTime(chatTimeRemaining);
+        aiSelectionButtons.style.display = "flex";
         chatContainer.style.display = "block";
-        statusElement.textContent = "Payment successful!";
+        statusElement.textContent = "Payment successful! Select an AI to start.";
         
-        if (chatHistory.length === 0) {
-          // Add welcome message
-          const welcomeMsg = "Hey there! I'm Luna. I'm so excited to chat with you. What's on your mind today? 💕";
-          addMessageToChat('girlfriend', welcomeMsg);
-          chatHistory.push({ role: 'girlfriend', content: welcomeMsg });
+        if (chatHistory.length === 0 || !selectedAI) {
+          chatTitle.textContent = "Select an AI to start chatting!";
         } else {
-          // Display existing chat history
+          updateChatTitle();
           displayChatHistory();
         }
         
@@ -408,6 +422,7 @@
           clearInterval(chatTimer);
           chatTimer = null;
           chatContainer.style.display = "none";
+          aiSelectionButtons.style.display = "none";
           statusElement.textContent = "Chat time expired. Buy more to continue!";
           saveAppState();
         }
@@ -443,12 +458,33 @@
       typingIndicator.style.display = show ? 'block' : 'none';
     }
 
+    // Update chat title based on selected AI
+    function updateChatTitle() {
+      if (selectedAI === "luna") {
+        chatTitle.textContent = "Chat with Luna 💕";
+      } else if (selectedAI === "assistant") {
+        chatTitle.textContent = "Chat with Assistant 🤓";
+      } else if (selectedAI === "mrWoof") {
+        chatTitle.textContent = "Chat with Mr. Woof 🐶";
+      } else {
+        chatTitle.textContent = "Select an AI to start chatting!";
+      }
+    }
+
+    // Generate Mr. Woof response
+    function generateMrWoofResponse() {
+      const woofCount = Math.floor(Math.random() * 5) + 1;
+      let response = "Woof ".repeat(woofCount).trim();
+      response += " 🐶";
+      return response;
+    }
+
     // Send message and receive response
     async function sendMessage(event) {
       if (event) event.preventDefault();
       
       const message = chatInput.value.trim();
-      if (!message || chatTimeRemaining <= 0 || isTyping) return;
+      if (!message || chatTimeRemaining <= 0 || isTyping || !selectedAI) return;
       
       chatInput.value = "";
       sendMessageButton.disabled = true;
@@ -461,47 +497,68 @@
         chatHistory.push({ role: 'user', content: message });
         saveAppState();
         
-        // Show typing indicator
-        showTypingIndicator(true);
-        
-        // Simulate natural typing delay (300-800ms)
-        const typingDelay = 300 + Math.random() * 500;
-        await new Promise(resolve => setTimeout(resolve, typingDelay));
-        
-        // Send to server
-        const response = await fetch(`${API_URL}/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message, userName: "babe" })
-        });
-        
-        if (!response.ok) {
-          throw new Error(`Server error: ${response.status}`);
+        // Show typing indicator (not for Mr. Woof)
+        if (selectedAI !== "mrWoof") {
+          showTypingIndicator(true);
         }
         
-        const data = await response.json();
+        // Handle response based on selected AI
+        if (selectedAI === "mrWoof") {
+          const reply = generateMrWoofResponse();
+          await new Promise(resolve => setTimeout(resolve, 300)); // Small delay for realism
+          addMessageToChat('assistant', reply);
+          chatHistory.push({ role: 'assistant', content: reply });
+        } else {
+          // Simulate natural typing delay (300-800ms)
+          const typingDelay = 300 + Math.random() * 500;
+          await new Promise(resolve => setTimeout(resolve, typingDelay));
+          
+          // Send to server with AI type
+          const response = await fetch(`${API_URL}/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              message, 
+              userName: "babe", 
+              aiType: selectedAI // Pass AI type to backend
+            })
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Server error: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          
+          // Add AI response to UI
+          addMessageToChat('assistant', data.reply);
+          
+          // Add to history
+          chatHistory.push({ role: 'assistant', content: data.reply });
+        }
         
-        // Hide typing indicator
-        showTypingIndicator(false);
-        
-        // Add girlfriend's response to UI
-        addMessageToChat('girlfriend', data.reply);
-        
-        // Add to history
-        chatHistory.push({ role: 'girlfriend', content: data.reply });
         saveAppState();
         
       } catch (error) {
         console.error("Chat error:", error);
-        showTypingIndicator(false);
-        
-        const errorMsg = "Sorry, I got distracted thinking about you. What were we talking about? 💭";
-        addMessageToChat('girlfriend', errorMsg);
-        chatHistory.push({ role: 'girlfriend', content: errorMsg });
+        const errorMsg = "Oops, something went wrong. Try again? 😅";
+        addMessageToChat('assistant', errorMsg);
+        chatHistory.push({ role: 'assistant', content: errorMsg });
         saveAppState();
       } finally {
+        showTypingIndicator(false);
         sendMessageButton.disabled = false;
       }
+    }
+
+    // AI selection handlers
+    function selectAI(ai) {
+      selectedAI = ai;
+      chatHistory = []; // Reset chat history on AI switch
+      displayChatHistory();
+      updateChatTitle();
+      saveAppState();
+      chatInput.focus();
     }
 
     // Initialize the app
@@ -510,6 +567,9 @@
       connectButton.addEventListener('click', connectWallet);
       buyTimeButton.addEventListener('click', buyChatTime);
       sendMessageButton.addEventListener('click', sendMessage);
+      selectLuna.addEventListener('click', () => selectAI("luna"));
+      selectAssistant.addEventListener('click', () => selectAI("assistant"));
+      selectMrWoof.addEventListener('click', () => selectAI("mrWoof"));
       
       chatInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
@@ -518,7 +578,6 @@
         }
       });
       
-      // Set up MetaMask event listeners
       if (window.ethereum) {
         window.ethereum.on('accountsChanged', (accounts) => {
           if (accounts.length === 0) {
@@ -528,13 +587,12 @@
             buyTimeButton.disabled = true;
             userAddress = null;
             ethBalanceElement.textContent = "0";
-            
             if (chatTimer) {
               clearInterval(chatTimer);
               chatTimer = null;
             }
-            
             chatContainer.style.display = "none";
+            aiSelectionButtons.style.display = "none";
             saveAppState();
           } else {
             connectWallet();
@@ -546,7 +604,6 @@
         });
       }
       
-      // Try to load previous state
       const wasConnected = loadAppState();
       if (wasConnected && window.ethereum) {
         connectWallet();

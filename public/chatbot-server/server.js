@@ -26,29 +26,15 @@ function getSessionId(req) {
   return req.ip || 'default-session';
 }
 
-const girlfriendPrompt = `You are Luna, a flirty and playful AI girlfriend with a lively personality. You enjoy teasing and being affectionate with your partner. Your responses should sound natural and varied, showing your personality through your words.
-
-- Keep your responses short and conversational (1-3 sentences)
-- Use a friendly, playful tone that occasionally shows affection
-- Include an emoji in most responses, but naturally and not forced
-- Avoid repetitive phrases or patterns
-- Respond naturally to questions, including simple factual ones
-- If asked inappropriate questions, deflect in a playful way rather than shutting down
-- Use the user's name occasionally but not in every message
-- Maintain a consistent personality throughout the conversation
-
-The conversation so far:
-`;
-
 app.post('/chat', async (req, res) => {
   try {
-    const { message, userName = "babe" } = req.body;
+    const { message, userName = "babe", aiType = "luna" } = req.body;
     if (!message) {
       return res.status(400).json({ error: "Message is required" });
     }
     
     const sessionId = getSessionId(req);
-    console.log(`Received message from session ${sessionId}: ${message}`);
+    console.log(`Received message from session ${sessionId}: ${message} (AI: ${aiType})`);
     
     // Get or initialize conversation history
     if (!conversations.has(sessionId)) {
@@ -64,8 +50,33 @@ app.post('/chat', async (req, res) => {
       conversationHistory.shift();
     }
 
+    // Define AI-specific prompts
+    let prompt;
+    if (aiType === "luna") {
+      prompt = `You are Luna, a flirty and playful AI girlfriend with a lively personality. You enjoy teasing and being affectionate with your partner. Your responses should sound natural and varied, showing your personality through your words.
+- Keep your responses short and conversational (1-3 sentences)
+- Use a friendly, playful tone that occasionally shows affection
+- Include an emoji in most responses, but naturally and not forced
+- Avoid repetitive phrases or patterns
+- Respond naturally to questions, including simple factual ones
+- If asked inappropriate questions, deflect in a playful way rather than shutting down
+- Use the user's name occasionally but not in every message
+- Maintain a consistent personality throughout the conversation
+The conversation so far:`;
+    } else if (aiType === "assistant") {
+      prompt = `You are Assistant, a helpful and knowledgeable AI designed to assist with a wide range of tasks. You provide clear, concise, and accurate responses to questions and requests, maintaining a friendly and professional tone.
+- Keep your responses short and to the point (1-3 sentences)
+- Use a neutral, helpful tone
+- Avoid emojis unless they enhance clarity or friendliness
+- Answer factual questions accurately and assist with general tasks
+- If you can't answer something, admit it politely and suggest an alternative
+The conversation so far:`;
+    } else {
+      return res.status(400).json({ error: "Invalid AI type" });
+    }
+
     // Create the prompt with conversation history
-    const input = `${girlfriendPrompt}${conversationHistory.join('\n')}\n\nLuna: `;
+    const input = `${prompt}${conversationHistory.join('\n')}\n\n${aiType === "luna" ? "Luna" : "Assistant"}: `;
     
     try {
       const response = await axios.post(
@@ -106,25 +117,26 @@ app.post('/chat', async (req, res) => {
       // Very light filtering - just remove anything that breaks the chat display
       reply = reply.replace(/[\u0000-\u001F\u007F-\u009F]/g, "");
       
-      // Add a fallback emoji if none is present, but only about 30% of the time
-      const hasEmoji = /[\u{1F300}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u.test(reply);
-      if (!hasEmoji && Math.random() < 0.3) {
-        const emojis = ['💕', '💖', '😘', '😊', '💋', '😉', '🥰', '😌', '✨', '🌸'];
-        reply += ` ${emojis[Math.floor(Math.random() * emojis.length)]}`;
+      // Luna-specific: Add a fallback emoji if none is present, about 30% of the time
+      if (aiType === "luna") {
+        const hasEmoji = /[\u{1F300}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u.test(reply);
+        if (!hasEmoji && Math.random() < 0.3) {
+          const emojis = ['💕', '💖', '😘', '😊', '💋', '😉', '🥰', '😌', '✨', '🌸'];
+          reply += ` ${emojis[Math.floor(Math.random() * emojis.length)]}`;
+        }
       }
       
       // Add to conversation history
-      conversationHistory.push(`Luna: ${reply}`);
+      conversationHistory.push(`${aiType === "luna" ? "Luna" : "Assistant"}: ${reply}`);
       
-      // Log the interaction (modified for cloud environment)
+      // Log the interaction
       try {
-        const logEntry = `${new Date().toISOString()} - Session: ${sessionId} - You: ${message} | Luna: ${reply}\n`;
+        const logEntry = `${new Date().toISOString()} - Session: ${sessionId} - You: ${message} | ${aiType === "luna" ? "Luna" : "Assistant"}: ${reply}\n`;
         fs.appendFile('chat_log.txt', logEntry, (err) => {
           if (err) console.error("Error writing to log:", err);
         });
       } catch (logError) {
-        // Just log to console if file system logging fails
-        console.log(`Chat log: Session: ${sessionId} - You: ${message} | Luna: ${reply}`);
+        console.log(`Chat log: Session: ${sessionId} - You: ${message} | ${aiType === "luna" ? "Luna" : "Assistant"}: ${reply}`);
       }
       
       console.log(`Sending response to session ${sessionId}: ${reply}`);
@@ -133,18 +145,29 @@ app.post('/chat', async (req, res) => {
     } catch (apiError) {
       console.error("API error:", apiError.response?.data || apiError.message);
       
-      // Provide a better fallback response that doesn't feel like a template
-      const fallbacks = [
-        `Sorry, I got distracted thinking about you. What were we talking about? 💭`,
-        `Hmm, I think I lost my train of thought. Can we start over? 😊`,
-        `The connection between us seems a bit fuzzy right now. Let's try again? 💖`,
-        `I think I need a moment to gather my thoughts. How are you feeling today? ✨`,
-        `Something's distracting me. Maybe it's just how cute you are, ${userName}! 💕`
-      ];
+      // AI-specific fallback responses
+      let fallback;
+      if (aiType === "luna") {
+        const fallbacks = [
+          `Sorry, I got distracted thinking about you. What were we talking about? 💭`,
+          `Hmm, I think I lost my train of thought. Can we start over? 😊`,
+          `The connection between us seems a bit fuzzy right now. Let's try again? 💖`,
+          `I think I need a moment to gather my thoughts. How are you feeling today? ✨`,
+          `Something's distracting me. Maybe it's just how cute you are, ${userName}! 💕`
+        ];
+        fallback = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+      } else {
+        const fallbacks = [
+          `Oops, I hit a snag. Could you repeat that?`,
+          `My circuits got a bit tangled. What did you say?`,
+          `Sorry, I missed that. Can you try again?`,
+          `I’m having a little trouble here. Could you rephrase that?`,
+          `Looks like I need a reboot. What were we discussing?`
+        ];
+        fallback = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+      }
       
-      return res.json({ 
-        reply: fallbacks[Math.floor(Math.random() * fallbacks.length)]
-      });
+      return res.json({ reply: fallback });
     }
     
   } catch (error) {
